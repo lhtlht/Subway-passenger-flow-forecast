@@ -35,7 +35,7 @@ if __name__ == "__main__":
     '''
     #训练模型
     train,test = load_data()
-    is_model = False
+    is_model = True
     if is_model:
         model_test_starttime = pd.date_range("2019-01-28", "2019-01-29", freq="10min", closed="left")
         model_test_endtime = pd.date_range("2019-01-28", "2019-01-29", freq="10min", closed="right")
@@ -58,15 +58,17 @@ if __name__ == "__main__":
         model_train = train
     model_train = model_train[model_train['date']>='2019-01-07']
 
-    test = model.mean_model(model_train, test)
+    #test = model.mean_model(model_train, test)
+    test = model.weightTimeModel(model_train, test, is_model)
     if is_model:
         in_mae = model_eval(test['inNums'], test['realInNums'])
         out_mae = model_eval(test['outNums'], test['realOutNums'])
         print("in_mae",in_mae,"out_mae",out_mae,"in_out_mae",(in_mae+out_mae)/2.0)
     else:
-        test.to_csv("submit/baseline.csv", encoding="utf-8", index=False)
+        test.to_csv("submit/subway_flow_TimeSeries.csv", encoding="utf-8", index=False)
 """
 baseline:  offline-in_mae in_mae 14.574074074074074 out_mae 16.256601508916322 in_out_mae 15.415337791495197,线上15.1778
+in_mae 13.989540466392318 out_mae 14.90809327846365 in_out_mae 14.448816872427983,线上13.2032
 
 
 """
