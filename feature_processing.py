@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 TRAIN_DATA_PATH = "./data/Metro_train/"
 TEST_DATA_PATH = "./data/Metro_testA/"
-
+STATION_NUM = 81
 def count_out(out_array):
     return out_array.count() - out_array.sum()
 
@@ -31,11 +31,45 @@ def data_train_processing():
         else:
             recoreds = pd.read_csv(TRAIN_DATA_PATH + f'record_{record_date}.csv', encoding="utf-8")
         inout_station_data = inout_station(recoreds)
+        data_full = data_train_processing_fill(record_date)
+        inout_station_data = data_full.merge(inout_station_data, how="left", on=['stationID', 'startTime', 'endTime'])
+        inout_station_data.fillna(0, inplace=True)
         print(record_date, inout_station_data.shape)
         inout_train = inout_train.append([inout_station_data])
         print(inout_train.shape)
     print(inout_train.columns)
-    inout_train[['stationID', 'startTime', 'endTime', 'inNums', 'outNums']].to_csv("temp_data/inout_train.csv", index=False)
+    inout_train[['stationID', 'startTime', 'endTime', 'inNums', 'outNums']].to_csv("temp_data/inout_train_full.csv", index=False)
+
+
+def data_train_processing_fill(date):
+    date_add = (datetime.datetime.strptime(date,'%Y-%m-%d')+datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    df_starttime = pd.date_range(date, date_add, freq="10min", closed="left")
+    df_endtime = pd.date_range(date, date_add, freq="10min", closed="right")
+    df_station = np.ones((df_starttime.shape[0],))
+    df = pd.DataFrame()
+    for i in range(STATION_NUM):
+        station_df = pd.DataFrame()
+        station_df['stationID'] = df_station * i
+        station_df['startTime'] = df_starttime
+        station_df['endTime'] = df_endtime
+        df = df.append(station_df)
+    return df
+
+
+def feature_processing(train, test):
+    train.reset_index(inplace=True)
+    test.reset_index(inplace=True)
+    print(train.head())
+    train['hour'] = train.apply(lambda row: int(row['time'].split(':')[0]), axis=1)
+    train['minute'] = train.apply(lambda row: int(row['time'].split(':')[1]), axis=1)
+    train['date_int'] = train.apply(lambda row: int(row['date'].split('-')[2]), axis=1)
+
+    test['hour'] = test.apply(lambda row: int(row['time'].split(':')[0]), axis=1)
+    test['minute'] = test.apply(lambda row: int(row['time'].split(':')[2]), axis=1)
+    test['date_int'] = test.apply(lambda row: int(row['date'].split('-')[2]), axis=1)
+
+    return train, test
+
 
 
 if __name__ == "__main__":

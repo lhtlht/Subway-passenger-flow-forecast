@@ -12,7 +12,7 @@ TEMP_DATA_PATH = "./temp_data/"
 STATION_NUM = 81
 
 def load_data():
-    train = pd.read_csv(TEMP_DATA_PATH+"inout_train.csv", encoding="utf-8")
+    train = pd.read_csv(TEMP_DATA_PATH+"inout_train_full.csv", encoding="utf-8")
     train['date'] = train.apply(lambda row: row['startTime'].split(' ')[0], axis=1)
     train['time'] = train.apply(lambda row: row['startTime'].split(' ')[1], axis=1)
 
@@ -37,39 +37,31 @@ if __name__ == "__main__":
     train,test = load_data()
     is_model = True
     if is_model:
-        model_test_starttime = pd.date_range("2019-01-28", "2019-01-29", freq="10min", closed="left")
-        model_test_endtime = pd.date_range("2019-01-28", "2019-01-29", freq="10min", closed="right")
-        model_test_station = np.ones((model_test_starttime.shape[0],))
-        model_test = pd.DataFrame()
-        for i in range(STATION_NUM):
-            station_df = pd.DataFrame()
-            station_df['stationID'] = model_test_station * i
-            station_df['startTime'] = model_test_starttime
-            station_df['endTime'] = model_test_endtime
-            model_test = model_test.append(station_df)
-        model_test['time'] = model_test.apply(lambda row: str(row['startTime']).split(' ')[1], axis=1)
-        model_test_label = train[train['date']=='2019-01-28']
-        model_test_label.rename(columns={'inNums':'realInNums', 'outNums':'realOutNums'},inplace=True)
-        model_test_label = model_test_label.drop(columns=['startTime', 'endTime'])
-        model_test = model_test.merge(model_test_label, how="left", on=["stationID", "time"])
-        test = model_test
+        model_test = train[train['date']=='2019-01-28']
+        model_test.rename(columns={'inNums': 'realInNums', 'outNums': 'realOutNums'}, inplace=True)
         model_train = train[train['date'] != '2019-01-28']
+        test = model_test
     else:
         model_train = train
-    model_train = model_train[model_train['date']>='2019-01-07']
+    model_train = model_train[model_train['date']>='2019-01-14']
 
     #test = model.mean_model(model_train, test)
-    test = model.weightTimeModel(model_train, test, is_model)
+    #test = model.weightTimeModel(model_train, test, is_model)
+    print("开始特征处理")
+    model_train, test = feature_processing(model_train, test)
+    print("开始训练")
+    test = model.reg_model(model_train, test, is_model)
     if is_model:
         in_mae = model_eval(test['inNums'], test['realInNums'])
         out_mae = model_eval(test['outNums'], test['realOutNums'])
         print("in_mae",in_mae,"out_mae",out_mae,"in_out_mae",(in_mae+out_mae)/2.0)
     else:
-        test.to_csv("submit/subway_flow_TimeSeries.csv", encoding="utf-8", index=False)
+        test.to_csv("submit/subway_flow_TimeSeries_v2.csv", encoding="utf-8", index=False)
 """
 baseline:  offline-in_mae in_mae 14.574074074074074 out_mae 16.256601508916322 in_out_mae 15.415337791495197,线上15.1778
 in_mae 13.989540466392318 out_mae 14.90809327846365 in_out_mae 14.448816872427983,线上13.2032
 
+in_mae 13.763631687242798 out_mae 14.348079561042525 in_out_mae 14.055855624142662
 
 """
 
