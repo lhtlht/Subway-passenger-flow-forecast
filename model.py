@@ -15,14 +15,15 @@ lgb_params = {
     'min_child_samples': 5,
     'min_child_weight': 0.01,
     'subsample_freq': 1,
-    'num_leaves': 31,
-    'max_depth': 5,
-    'subsample': 0.6,
-    'colsample_bytree': 0.6,
+    'num_leaves': 63,
+    'max_depth': 7,
+    'subsample': 0.8,
+    'colsample_bytree': 0.8,
     'reg_alpha': 0,
     'reg_lambda': 5,
     'verbose': -1,
-    'seed': 4590
+    'random_state': 4590,
+    'n_jobs': -1
 }
 
 def get_weight_list(num_list, test_week):
@@ -88,6 +89,7 @@ def weightTimeModel(model_train, test, is_model):
     test.fillna(0, inplace=True)
     print(test.info())
     return test
+
 def multi_column_LabelEncoder(df,columns,rename=True):
     le = LabelEncoder()
     for column in columns:
@@ -106,8 +108,8 @@ def reg_model(model_train, test, is_model):
     test.reset_index(inplace=True)
     print(model_train.head())
 
-    features = [ 'date_int', 'hour', 'minute']
-    onehot_features = ['stationID', 'date', 'time']
+    features = [ 'hour', 'minute', 'preInNums', 'preOutNums', 'inMax', 'outMax', 'shift', 'is_shift']
+    onehot_features = ['stationID', 'time', 'lineID', 'lineSort']
     combine = pd.concat([model_train, test], axis=0)
     combine = multi_column_LabelEncoder(combine, onehot_features, rename=True)
     #one hot 处理
@@ -134,7 +136,7 @@ def reg_model(model_train, test, is_model):
     kfolder = KFold(n_splits=n_fold, shuffle=True, random_state=2019)
     kfold = kfolder.split(train_x, train_y_in)
     for train_index, vali_index in kfold:
-        print(count_fold)
+        print("training......fold",count_fold)
         count_fold = count_fold + 1
         k_x_train = train_x[train_index]
         k_y_train = train_y_in.loc[train_index]
@@ -163,12 +165,12 @@ def reg_model(model_train, test, is_model):
     kfolder = KFold(n_splits=n_fold, shuffle=True, random_state=2019)
     kfold = kfolder.split(train_x, train_y_out)
     for train_index, vali_index in kfold:
-        print(count_fold)
+        print("training......fold",count_fold)
         count_fold = count_fold + 1
         k_x_train = train_x[train_index]
-        k_y_train = train_y_in.loc[train_index]
+        k_y_train = train_y_out.loc[train_index]
         k_x_vali = train_x[vali_index]
-        k_y_vali = train_y_in.loc[vali_index]
+        k_y_vali = train_y_out.loc[vali_index]
         dtrain = lgb.Dataset(k_x_train, k_y_train)
         dvalid = lgb.Dataset(k_x_vali, k_y_vali, reference=dtrain)
 
@@ -189,9 +191,17 @@ def reg_model(model_train, test, is_model):
     #输出结果
     test['inNums'] = preds_in
     test['outNums'] = preds_out
+    #结果修正
+    test.loc[test.inNums < 1,'inNums'] = 0
+    test.loc[test.outNums < 2, 'outNums'] = 0
     test['inNums'] = test.apply(lambda row: round(row['inNums'], 0), axis=1)
     test['outNums'] = test.apply(lambda row: round(row['outNums'], 0), axis=1)
-    test = test.drop(columns=['time'])
+    # test['inNums'] = test.apply(lambda row: round(row['inNums'], 0), axis=1)
+    # test['outNums'] = test.apply(lambda row: round(row['outNums'], 0), axis=1)
+    if is_model:
+        test = test[['stationID', 'startTime', 'endTime', 'inNums', 'outNums', 'realInNums', 'realOutNums']]
+    else:
+        test = test[['stationID', 'startTime', 'endTime', 'inNums', 'outNums']]
     test.fillna(0, inplace=True)
     print(test.info())
     return test

@@ -56,22 +56,141 @@ def data_train_processing_fill(date):
     return df
 
 
-def feature_processing(train, test):
+def get_weight_list(num_list):
+    sum_l = sum(num_list)
+    num_list2 = []
+    for i in num_list:
+        num_list2.append(sum_l/i)
+    sum_l = sum(num_list2)
+    return [i/sum_l for i in num_list2]
+
+def get_predate_sts(train_full, test, pre_day):
+    date_mean = pd.DataFrame()
+    train_dates_list = list(train_full.groupby('date').size().index)
+    for train_date in train_dates_list[13:]:
+        print("date mean......",pre_day,train_date)
+        test_date = int(train_date.split('-')[2])
+        test_date_pre = (datetime.datetime.strptime(train_date, '%Y-%m-%d')-datetime.timedelta(days=pre_day)).strftime("%Y-%m-%d")
+
+        train_data_range = train_full[(train_full['date']>=test_date_pre) & (train_full['date']<train_date)]
+        train_dates = list(train_data_range.groupby('date').size().index)
+        train_date_list = []
+        for date in train_dates:
+            train_date_list.append((test_date - int(date.split('-')[2])) * 2)
+        date_wl = get_weight_list(train_date_list)
+        date_wd = {}
+        for d, w in zip(train_dates, date_wl):
+            date_wd[d] = w
+
+        #计算最大值和最小值
+        time_in_max = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).max().reset_index().rename(columns={'inNums': 'inMax'})
+        time_in_min = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).min().reset_index().rename(columns={'inNums': 'inMin'})
+        time_in_mean = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).mean().reset_index().rename(columns={'inNums': 'inMean'})
+        time_out_max = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).max().reset_index().rename(columns={'outNums': 'outMax'})
+        time_out_min = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).min().reset_index().rename(columns={'outNums': 'outMin'})
+        time_out_mean = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).mean().reset_index().rename(columns={'outNums': 'outMean'})
+
+
+        train_data_range['inNums'] = train_data_range.apply(lambda row: row['inNums'] * date_wd[row['date']], axis=1)
+        train_data_range['outNums'] = train_data_range.apply(lambda row: row['outNums'] * date_wd[row['date']], axis=1)
+        time_in_mean_w = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).sum().reset_index()
+        time_in_mean_w.rename(columns={'inNums': 'preInNums'}, inplace=True)
+        time_out_mean_w = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).sum().reset_index()
+        time_out_mean_w.rename(columns={'outNums': 'preOutNums'}, inplace=True)
+
+        df = train_full[train_full['date']==train_date].merge(time_in_mean_w, how="left", on=["stationID", "time"])
+        df = df.merge(time_out_mean_w, how="left", on=["stationID", "time"])
+
+        df = df.merge(time_out_max, how="left", on=["stationID", "time"])
+        df = df.merge(time_out_min, how="left", on=["stationID", "time"])
+        df = df.merge(time_out_mean, how="left", on=["stationID", "time"])
+        df = df.merge(time_in_max, how="left", on=["stationID", "time"])
+        df = df.merge(time_in_min, how="left", on=["stationID", "time"])
+        df = df.merge(time_in_mean, how="left", on=["stationID", "time"])
+
+        date_mean = date_mean.append(df)
+
+
+
+    #统计测试集
+    test_date = test['date'][0]
+    test_date_pre = (datetime.datetime.strptime(test_date, '%Y-%m-%d') - datetime.timedelta(days=7)).strftime(
+        "%Y-%m-%d")
+    train_data_range = train_full[(train_full['date'] >= test_date_pre)]
+    train_dates = list(train_data_range.groupby('date').size().index)
+    train_date_list = []
+    for date in train_dates:
+        train_date_list.append((int(test_date.split('-')[2]) - int(date.split('-')[2])) * 2)
+    date_wl = get_weight_list(train_date_list)
+    date_wd = {}
+    for d, w in zip(train_dates, date_wl):
+        date_wd[d] = w
+    time_in_max = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).max().reset_index().rename(columns={'inNums': 'inMax'})
+    time_in_min = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).min().reset_index().rename(columns={'inNums': 'inMin'})
+    time_in_mean = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).mean().reset_index().rename(columns={'inNums': 'inMean'})
+
+    time_out_max = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).max().reset_index().rename(columns={'outNums': 'outMax'})
+    time_out_min = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).min().reset_index().rename(columns={'outNums': 'outMin'})
+    time_out_mean = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).mean().reset_index().rename(columns={'outNums': 'outMean'})
+
+
+    train_data_range['inNums'] = train_data_range.apply(lambda row: row['inNums'] * date_wd[row['date']], axis=1)
+    train_data_range['outNums'] = train_data_range.apply(lambda row: row['outNums'] * date_wd[row['date']], axis=1)
+    time_in_mean_w = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).sum().reset_index()
+    time_in_mean_w.rename(columns={'inNums': 'preInNums'}, inplace=True)
+    time_out_mean_w = train_data_range[['time', 'stationID', 'outNums']].groupby(
+        ['stationID', 'time']).sum().reset_index()
+    time_out_mean_w.rename(columns={'outNums': 'preOutNums'}, inplace=True)
+
+    test = test.merge(time_in_mean_w, how="left", on=["stationID", "time"])
+    test = test.merge(time_out_mean_w, how="left", on=["stationID", "time"])
+    test = test.merge(time_out_max, how="left", on=["stationID", "time"])
+    test = test.merge(time_out_min, how="left", on=["stationID", "time"])
+    test = test.merge(time_out_mean, how="left", on=["stationID", "time"])
+    test = test.merge(time_in_mean, how="left", on=["stationID", "time"])
+    test = test.merge(time_in_max, how="left", on=["stationID", "time"])
+    test = test.merge(time_in_min, how="left", on=["stationID", "time"])
+    return date_mean, test
+
+
+
+
+def feature_processing(train, test, train_full):
     train.reset_index(inplace=True)
     test.reset_index(inplace=True)
+
+    train,test = get_predate_sts(train_full, test, 7)
+
+    train_14d, test_14d = get_predate_sts(train_full, test, 14)
+
     print(train.head())
     train['hour'] = train.apply(lambda row: int(row['time'].split(':')[0]), axis=1)
     train['minute'] = train.apply(lambda row: int(row['time'].split(':')[1]), axis=1)
     train['date_int'] = train.apply(lambda row: int(row['date'].split('-')[2]), axis=1)
+    train['weekday'] = train.apply(lambda row: datetime.datetime.strptime(row['date'],'%Y-%m-%d').weekday(), axis=1)
+    train['is_weekday'] = train.apply(lambda row: 1 if datetime.datetime.strptime(row['date'], '%Y-%m-%d').weekday()==6 else 0, axis=1)
 
     test['hour'] = test.apply(lambda row: int(row['time'].split(':')[0]), axis=1)
     test['minute'] = test.apply(lambda row: int(row['time'].split(':')[2]), axis=1)
     test['date_int'] = test.apply(lambda row: int(row['date'].split('-')[2]), axis=1)
+    test['weekday'] = test.apply(lambda row: datetime.datetime.strptime(row['date'], '%Y-%m-%d').weekday(), axis=1)
+    test['is_weekday'] = test.apply(lambda row: 1 if datetime.datetime.strptime(row['date'], '%Y-%m-%d').weekday()==6 else 0, axis=1)
+
+    #train_inout_mean = get_date_mean(train_full)
+    #train['in_7d_mean'] = train.apply(lambda row: , axis=1)
 
     return train, test
 
 
+def processing_map():
+    station_map = pd.read_csv("data/Metro_roadMap.csv", encoding="utf-8")
+    print(station_map.columns)
+    print(station_map.sum(axis=0))
 
 if __name__ == "__main__":
 
-    data_train_processing()
+    #data_train_processing()
+    #processing_map()
+
+    #计算每种类型的卡的进出人数
+    pass
