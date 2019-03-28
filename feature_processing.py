@@ -64,11 +64,11 @@ def get_weight_list(num_list):
     sum_l = sum(num_list2)
     return [i/sum_l for i in num_list2]
 
-def get_predate_sts(train_full, test, pre_day):
+def get_predate_sts(train_full, test, pre_day, gfeature):
     date_mean = pd.DataFrame()
     train_dates_list = list(train_full.groupby('date').size().index)
+    print("date mean......", gfeature, pre_day)
     for train_date in train_dates_list[13:]:
-        print("date mean......",pre_day,train_date)
         test_date = int(train_date.split('-')[2])
         test_date_pre = (datetime.datetime.strptime(train_date, '%Y-%m-%d')-datetime.timedelta(days=pre_day)).strftime("%Y-%m-%d")
 
@@ -83,30 +83,30 @@ def get_predate_sts(train_full, test, pre_day):
             date_wd[d] = w
 
         #计算最大值和最小值
-        time_in_max = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).max().reset_index().rename(columns={'inNums': 'inMax'})
-        time_in_min = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).min().reset_index().rename(columns={'inNums': 'inMin'})
-        time_in_mean = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).mean().reset_index().rename(columns={'inNums': 'inMean'})
-        time_out_max = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).max().reset_index().rename(columns={'outNums': 'outMax'})
-        time_out_min = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).min().reset_index().rename(columns={'outNums': 'outMin'})
-        time_out_mean = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).mean().reset_index().rename(columns={'outNums': 'outMean'})
+        time_in_max = train_data_range[[gfeature, 'stationID', 'inNums']].groupby(['stationID', gfeature]).max().reset_index().rename(columns={'inNums': 'inMax'})
+        time_in_min = train_data_range[[gfeature, 'stationID', 'inNums']].groupby(['stationID', gfeature]).min().reset_index().rename(columns={'inNums': 'inMin'})
+        time_in_mean = train_data_range[[gfeature, 'stationID', 'inNums']].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={'inNums': 'inMean'})
+        time_out_max = train_data_range[[gfeature, 'stationID', 'outNums']].groupby(['stationID', gfeature]).max().reset_index().rename(columns={'outNums': 'outMax'})
+        time_out_min = train_data_range[[gfeature, 'stationID', 'outNums']].groupby(['stationID', gfeature]).min().reset_index().rename(columns={'outNums': 'outMin'})
+        time_out_mean = train_data_range[[gfeature, 'stationID', 'outNums']].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={'outNums': 'outMean'})
 
 
         train_data_range['inNums'] = train_data_range.apply(lambda row: row['inNums'] * date_wd[row['date']], axis=1)
         train_data_range['outNums'] = train_data_range.apply(lambda row: row['outNums'] * date_wd[row['date']], axis=1)
-        time_in_mean_w = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).sum().reset_index()
+        time_in_mean_w = train_data_range[[gfeature, 'stationID', 'inNums']].groupby(['stationID', gfeature]).sum().reset_index()
         time_in_mean_w.rename(columns={'inNums': 'preInNums'}, inplace=True)
-        time_out_mean_w = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).sum().reset_index()
+        time_out_mean_w = train_data_range[[gfeature, 'stationID', 'outNums']].groupby(['stationID', gfeature]).sum().reset_index()
         time_out_mean_w.rename(columns={'outNums': 'preOutNums'}, inplace=True)
 
-        df = train_full[train_full['date']==train_date].merge(time_in_mean_w, how="left", on=["stationID", "time"])
-        df = df.merge(time_out_mean_w, how="left", on=["stationID", "time"])
+        df = train_full[train_full['date']==train_date].merge(time_in_mean_w, how="left", on=["stationID", gfeature])
+        df = df.merge(time_out_mean_w, how="left", on=["stationID", gfeature])
 
-        df = df.merge(time_out_max, how="left", on=["stationID", "time"])
-        df = df.merge(time_out_min, how="left", on=["stationID", "time"])
-        df = df.merge(time_out_mean, how="left", on=["stationID", "time"])
-        df = df.merge(time_in_max, how="left", on=["stationID", "time"])
-        df = df.merge(time_in_min, how="left", on=["stationID", "time"])
-        df = df.merge(time_in_mean, how="left", on=["stationID", "time"])
+        df = df.merge(time_out_max, how="left", on=["stationID", gfeature])
+        df = df.merge(time_out_min, how="left", on=["stationID", gfeature])
+        df = df.merge(time_out_mean, how="left", on=["stationID", gfeature])
+        df = df.merge(time_in_max, how="left", on=["stationID", gfeature])
+        df = df.merge(time_in_min, how="left", on=["stationID", gfeature])
+        df = df.merge(time_in_mean, how="left", on=["stationID", gfeature])
 
         date_mean = date_mean.append(df)
 
@@ -125,31 +125,31 @@ def get_predate_sts(train_full, test, pre_day):
     date_wd = {}
     for d, w in zip(train_dates, date_wl):
         date_wd[d] = w
-    time_in_max = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).max().reset_index().rename(columns={'inNums': 'inMax'})
-    time_in_min = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).min().reset_index().rename(columns={'inNums': 'inMin'})
-    time_in_mean = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).mean().reset_index().rename(columns={'inNums': 'inMean'})
+    time_in_max = train_data_range[[gfeature, 'stationID', 'inNums']].groupby(['stationID', gfeature]).max().reset_index().rename(columns={'inNums': 'inMax'})
+    time_in_min = train_data_range[[gfeature, 'stationID', 'inNums']].groupby(['stationID', gfeature]).min().reset_index().rename(columns={'inNums': 'inMin'})
+    time_in_mean = train_data_range[[gfeature, 'stationID', 'inNums']].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={'inNums': 'inMean'})
 
-    time_out_max = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).max().reset_index().rename(columns={'outNums': 'outMax'})
-    time_out_min = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).min().reset_index().rename(columns={'outNums': 'outMin'})
-    time_out_mean = train_data_range[['time', 'stationID', 'outNums']].groupby(['stationID', 'time']).mean().reset_index().rename(columns={'outNums': 'outMean'})
+    time_out_max = train_data_range[[gfeature, 'stationID', 'outNums']].groupby(['stationID', gfeature]).max().reset_index().rename(columns={'outNums': 'outMax'})
+    time_out_min = train_data_range[[gfeature, 'stationID', 'outNums']].groupby(['stationID', gfeature]).min().reset_index().rename(columns={'outNums': 'outMin'})
+    time_out_mean = train_data_range[[gfeature, 'stationID', 'outNums']].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={'outNums': 'outMean'})
 
 
     train_data_range['inNums'] = train_data_range.apply(lambda row: row['inNums'] * date_wd[row['date']], axis=1)
     train_data_range['outNums'] = train_data_range.apply(lambda row: row['outNums'] * date_wd[row['date']], axis=1)
-    time_in_mean_w = train_data_range[['time', 'stationID', 'inNums']].groupby(['stationID', 'time']).sum().reset_index()
+    time_in_mean_w = train_data_range[[gfeature, 'stationID', 'inNums']].groupby(['stationID', gfeature]).sum().reset_index()
     time_in_mean_w.rename(columns={'inNums': 'preInNums'}, inplace=True)
-    time_out_mean_w = train_data_range[['time', 'stationID', 'outNums']].groupby(
-        ['stationID', 'time']).sum().reset_index()
+    time_out_mean_w = train_data_range[[gfeature, 'stationID', 'outNums']].groupby(
+        ['stationID', gfeature]).sum().reset_index()
     time_out_mean_w.rename(columns={'outNums': 'preOutNums'}, inplace=True)
 
-    test = test.merge(time_in_mean_w, how="left", on=["stationID", "time"])
-    test = test.merge(time_out_mean_w, how="left", on=["stationID", "time"])
-    test = test.merge(time_out_max, how="left", on=["stationID", "time"])
-    test = test.merge(time_out_min, how="left", on=["stationID", "time"])
-    test = test.merge(time_out_mean, how="left", on=["stationID", "time"])
-    test = test.merge(time_in_mean, how="left", on=["stationID", "time"])
-    test = test.merge(time_in_max, how="left", on=["stationID", "time"])
-    test = test.merge(time_in_min, how="left", on=["stationID", "time"])
+    test = test.merge(time_in_mean_w, how="left", on=["stationID", gfeature])
+    test = test.merge(time_out_mean_w, how="left", on=["stationID", gfeature])
+    test = test.merge(time_out_max, how="left", on=["stationID", gfeature])
+    test = test.merge(time_out_min, how="left", on=["stationID", gfeature])
+    test = test.merge(time_out_mean, how="left", on=["stationID", gfeature])
+    test = test.merge(time_in_mean, how="left", on=["stationID", gfeature])
+    test = test.merge(time_in_max, how="left", on=["stationID", gfeature])
+    test = test.merge(time_in_min, how="left", on=["stationID", gfeature])
     return date_mean, test
 
 
@@ -159,11 +159,8 @@ def feature_processing(train, test, train_full):
     train.reset_index(inplace=True)
     test.reset_index(inplace=True)
 
-    train,test = get_predate_sts(train_full, test, 7)
+    train_full['hour'] = train_full.apply(lambda row: int(row['time'].split(':')[0]), axis=1)
 
-    train_14d, test_14d = get_predate_sts(train_full, test, 14)
-
-    print(train.head())
     train['hour'] = train.apply(lambda row: int(row['time'].split(':')[0]), axis=1)
     train['minute'] = train.apply(lambda row: int(row['time'].split(':')[1]), axis=1)
     train['date_int'] = train.apply(lambda row: int(row['date'].split('-')[2]), axis=1)
@@ -176,8 +173,42 @@ def feature_processing(train, test, train_full):
     test['weekday'] = test.apply(lambda row: datetime.datetime.strptime(row['date'], '%Y-%m-%d').weekday(), axis=1)
     test['is_weekday'] = test.apply(lambda row: 1 if datetime.datetime.strptime(row['date'], '%Y-%m-%d').weekday()==6 else 0, axis=1)
 
-    #train_inout_mean = get_date_mean(train_full)
-    #train['in_7d_mean'] = train.apply(lambda row: , axis=1)
+    """
+        preInNums,preOutNums,inMax,outMax,inMin,outMin,inMean,outMean
+    """
+    train_hour, test_hour = get_predate_sts(train_full, test, pre_day=7, gfeature='hour')
+    train, test_7d = get_predate_sts(train_full, test, pre_day=7, gfeature='time')
+    sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean']
+    train_14d, test_14d = get_predate_sts(train_full, test, pre_day=14, gfeature='time')
+
+    test = test_7d
+    for sf in sts_feature:
+        train[sf + '_14d'] = train_14d[sf]
+        test[sf + '_14d'] = test_14d[sf]
+    for sf in sts_feature:
+        train[sf + '_hour'] = train_hour[sf]
+        test[sf + '_hour'] = test_hour[sf]
+    train['7d_14d_indiff'] = train['inMax']-train['inMax_14d']
+    train['7d_14d_outdiff'] = train['outMax'] - train['outMax_14d']
+    train['7d_14d_inrate'] = train['inMax'] / (train['inMax_14d'])
+    train['7d_14d_outrate'] = train['outMax'] / (train['outMax_14d'])
+
+    train['7d_14d_indiffm'] = train['inMean'] - train['inMean_14d']
+    train['7d_14d_outdiffm'] = train['outMean'] - train['outMean_14d']
+    train['7d_14d_inratem'] = train['inMean'] / (train['inMean_14d'])
+    train['7d_14d_outratem'] = train['outMean'] / (train['outMean_14d'])
+
+
+    test['7d_14d_indiff'] = test['inMax'] - test['inMax_14d']
+    test['7d_14d_outdiff'] = test['outMax'] - test['outMax_14d']
+    test['7d_14d_inrate'] = test['inMax'] / (test['inMax_14d'])
+    test['7d_14d_outrate'] = test['outMax'] / (test['outMax_14d'])
+
+    test['7d_14d_indiffm'] = test['inMean'] - test['inMean_14d']
+    test['7d_14d_outdiffm'] = test['outMean'] - test['outMean_14d']
+    test['7d_14d_inratem'] = test['inMean'] / (test['inMean_14d'])
+    test['7d_14d_outratem'] = test['outMean'] / (test['outMean_14d'])
+
 
     return train, test
 

@@ -25,7 +25,24 @@ lgb_params = {
     'random_state': 4590,
     'n_jobs': -1
 }
-
+xgb_params = {
+        'booster': 'gbtree',
+        'learning_rate': 0.01,
+        'max_depth': 5,
+        'subsample': 0.7,
+        'colsample_bytree': 0.8,
+        'objective': 'reg:linear',
+        'n_estimators': 10000,
+        'min_child_weight': 3,
+        'gamma': 0,
+        'silent': True,
+        'n_jobs': -1,
+        'random_state': 4590,
+        'reg_alpha': 2,
+        'reg_lambda': 0.1,
+        'alpha': 1,
+        'verbose': 1
+    }
 def get_weight_list(num_list, test_week):
     sum_l = sum(num_list)
     num_list2 = []
@@ -61,14 +78,15 @@ def weightTimeModel(model_train, test, is_model):
     train_date_list = []
 
     for date in train_dates:
-        if datetime.strptime(date,'%Y-%m-%d').weekday()==test_week:
-            train_date_list.append((test_date - int(date.split('-')[2])) * 1.5)
-        elif datetime.strptime(date,'%Y-%m-%d').weekday()==6:
-            train_date_list.append((test_date - int(date.split('-')[2])) * 3)
-        elif datetime.strptime(date,'%Y-%m-%d').weekday()==5:
-            train_date_list.append((test_date - int(date.split('-')[2])) * 2.5)
-        else:
-            train_date_list.append((test_date - int(date.split('-')[2])) * 2)
+        train_date_list.append((test_date - int(date.split('-')[2])) * 2)
+        # if datetime.strptime(date,'%Y-%m-%d').weekday()==test_week:
+        #     train_date_list.append((test_date - int(date.split('-')[2])) * 1.5)
+        # elif datetime.strptime(date,'%Y-%m-%d').weekday()==6:
+        #     train_date_list.append((test_date - int(date.split('-')[2])) * 3)
+        # elif datetime.strptime(date,'%Y-%m-%d').weekday()==5:
+        #     train_date_list.append((test_date - int(date.split('-')[2])) * 2.5)
+        # else:
+        #     train_date_list.append((test_date - int(date.split('-')[2])) * 2)
         #train_date_list.append((test_date - int(date.split('-')[2])) * (datetime.strptime(date,'%Y-%m-%d').weekday()-test_week+2))
     date_wl = get_weight_list(train_date_list, test_week)
     date_wd = {}
@@ -102,13 +120,17 @@ def multi_column_LabelEncoder(df,columns,rename=True):
     return df
 
 
-def reg_model(model_train, test, is_model):
+def reg_model(model_train, test, model_type, is_model):
     import lightgbm as lgb
+    from xgboost import XGBRegressor
     model_train.reset_index(inplace=True)
     test.reset_index(inplace=True)
     print(model_train.head())
 
-    features = [ 'hour', 'minute', 'preInNums', 'preOutNums', 'inMax', 'outMax', 'shift', 'is_shift']
+    features = ['hour', 'minute', 'shift', 'is_shift', 'preInNums', 'preOutNums', 'inMax', 'outMax',
+                 'inMax_14d',  'outMax_14d', '7d_14d_indiff', '7d_14d_outdiff',
+                 ]
+    sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean']
     onehot_features = ['stationID', 'time', 'lineID', 'lineSort']
     combine = pd.concat([model_train, test], axis=0)
     combine = multi_column_LabelEncoder(combine, onehot_features, rename=True)
@@ -120,6 +142,8 @@ def reg_model(model_train, test, is_model):
 
     train_x_original = combine[features][:model_train.shape[0]]
     test_x_original = combine[features][model_train.shape[0]:]
+    print(train_x_original.shape)
+    print(train_x_onehot.shape)
     train_x = sparse.hstack((train_x_onehot, train_x_original)).tocsr()
     test_x = sparse.hstack((test_x_onehot, test_x_original)).tocsr()
 
@@ -142,15 +166,20 @@ def reg_model(model_train, test, is_model):
         k_y_train = train_y_in.loc[train_index]
         k_x_vali = train_x[vali_index]
         k_y_vali = train_y_in.loc[vali_index]
-        dtrain = lgb.Dataset(k_x_train, k_y_train)
-        dvalid = lgb.Dataset(k_x_vali, k_y_vali, reference=dtrain)
-
-        lgb_model = lgb.LGBMRegressor(**lgb_params)
-        lgb_model = lgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
-                                  early_stopping_rounds=200, verbose=False, eval_metric="l2")
-        k_pred_12 = lgb_model.predict(k_x_vali, num_iteration=lgb_model.best_iteration_)
-        pred = lgb_model.predict(test_x, num_iteration=lgb_model.best_iteration_)
-
+        if model_type == 'lgb':
+            dtrain = lgb.Dataset(k_x_train, k_y_train)
+            dvalid = lgb.Dataset(k_x_vali, k_y_vali, reference=dtrain)
+            lgb_model = lgb.LGBMRegressor(**lgb_params)
+            lgb_model = lgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
+                                      early_stopping_rounds=200, verbose=False, eval_metric="l2")
+            k_pred_12 = lgb_model.predict(k_x_vali, num_iteration=lgb_model.best_iteration_)
+            pred = lgb_model.predict(test_x, num_iteration=lgb_model.best_iteration_)
+        else:
+            xgb_model = XGBRegressor(**xgb_params)
+            xgb_model = xgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
+                                      early_stopping_rounds=200, verbose=False)
+            k_pred_l2 = xgb_model.predict(k_x_vali)
+            pred = xgb_model.predict(test_x)
         preds_list.append(pred)
 
     preds_columns = ['preds_{id}'.format(id=i) for i in range(n_fold)]
@@ -174,11 +203,20 @@ def reg_model(model_train, test, is_model):
         dtrain = lgb.Dataset(k_x_train, k_y_train)
         dvalid = lgb.Dataset(k_x_vali, k_y_vali, reference=dtrain)
 
-        lgb_model = lgb.LGBMRegressor(**lgb_params)
-        lgb_model = lgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
-                                  early_stopping_rounds=200, verbose=False, eval_metric="l2")
-        k_pred_12 = lgb_model.predict(k_x_vali, num_iteration=lgb_model.best_iteration_)
-        pred = lgb_model.predict(test_x, num_iteration=lgb_model.best_iteration_)
+        if model_type == 'lgb':
+            dtrain = lgb.Dataset(k_x_train, k_y_train)
+            dvalid = lgb.Dataset(k_x_vali, k_y_vali, reference=dtrain)
+            lgb_model = lgb.LGBMRegressor(**lgb_params)
+            lgb_model = lgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
+                                      early_stopping_rounds=200, verbose=False, eval_metric="l2")
+            k_pred_12 = lgb_model.predict(k_x_vali, num_iteration=lgb_model.best_iteration_)
+            pred = lgb_model.predict(test_x, num_iteration=lgb_model.best_iteration_)
+        else:
+            xgb_model = XGBRegressor(**xgb_params)
+            xgb_model = xgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
+                                      early_stopping_rounds=200, verbose=False)
+            k_pred_l2 = xgb_model.predict(k_x_vali)
+            pred = xgb_model.predict(test_x)
 
         preds_list.append(pred)
 
