@@ -183,6 +183,8 @@ def get_pre_paytype_sts(train_full, test, pre_day, gfeature, paytype):
     date_mean = pd.DataFrame()
     train_dates_list = list(train_full.groupby('date').size().index)
     print("date mean......", gfeature, pre_day)
+    p_innums = paytype + '_inNums'
+    p_outnums = paytype + '_outNums'
     for train_date in train_dates_list[13:]:
         test_date = int(train_date.split('-')[2])
         test_date_pre = (datetime.datetime.strptime(train_date, '%Y-%m-%d')-datetime.timedelta(days=pre_day)).strftime("%Y-%m-%d")
@@ -198,20 +200,21 @@ def get_pre_paytype_sts(train_full, test, pre_day, gfeature, paytype):
             date_wd[d] = w
 
         #计算最大值和最小值
-        time_in_max = train_data_range[[gfeature, 'stationID', paytype+'_inNums']].groupby(['stationID', gfeature]).max().reset_index().rename(columns={'inNums': paytype+'_inMax'})
-        time_in_min = train_data_range[[gfeature, 'stationID', paytype+'_inNums']].groupby(['stationID', gfeature]).min().reset_index().rename(columns={'inNums': paytype+'_inMin'})
-        time_in_mean = train_data_range[[gfeature, 'stationID', paytype+'_inNums']].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={'inNums': paytype+'_inMean'})
-        time_out_max = train_data_range[[gfeature, 'stationID', paytype+'_outNums']].groupby(['stationID', gfeature]).max().reset_index().rename(columns={'outNums': paytype+'_outMax'})
-        time_out_min = train_data_range[[gfeature, 'stationID', paytype+'_outNums']].groupby(['stationID', gfeature]).min().reset_index().rename(columns={'outNums': paytype+'_outMin'})
-        time_out_mean = train_data_range[[gfeature, 'stationID', paytype+'_outNums']].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={'outNums': paytype+'_outMean'})
+
+        time_in_max = train_data_range[[gfeature, 'stationID', p_innums]].groupby(['stationID', gfeature]).max().reset_index().rename(columns={p_innums: paytype+'_inMax'})
+        time_in_min = train_data_range[[gfeature, 'stationID', p_innums]].groupby(['stationID', gfeature]).min().reset_index().rename(columns={p_innums: paytype+'_inMin'})
+        time_in_mean = train_data_range[[gfeature, 'stationID', p_innums]].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={p_innums: paytype+'_inMean'})
+        time_out_max = train_data_range[[gfeature, 'stationID', p_outnums]].groupby(['stationID', gfeature]).max().reset_index().rename(columns={p_outnums: paytype+'_outMax'})
+        time_out_min = train_data_range[[gfeature, 'stationID', p_outnums]].groupby(['stationID', gfeature]).min().reset_index().rename(columns={p_outnums: paytype+'_outMin'})
+        time_out_mean = train_data_range[[gfeature, 'stationID', p_outnums]].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={p_outnums: paytype+'_outMean'})
 
 
-        train_data_range[paytype+'_inNums'] = train_data_range.apply(lambda row: row[paytype+'_inNums'] * date_wd[row['date']], axis=1)
-        train_data_range[paytype+'_outNums'] = train_data_range.apply(lambda row: row[paytype+'_outNums'] * date_wd[row['date']], axis=1)
-        time_in_mean_w = train_data_range[[gfeature, 'stationID', 'inNums']].groupby(['stationID', gfeature]).sum().reset_index()
-        time_in_mean_w.rename(columns={paytype+'_inNums': paytype+'_preInNums'}, inplace=True)
-        time_out_mean_w = train_data_range[[gfeature, 'stationID', paytype+'_outNums']].groupby(['stationID', gfeature]).sum().reset_index()
-        time_out_mean_w.rename(columns={paytype+'_outNums': paytype+'_preOutNums'}, inplace=True)
+        train_data_range[p_innums] = train_data_range.apply(lambda row: row[p_innums] * date_wd[row['date']], axis=1)
+        train_data_range[p_outnums] = train_data_range.apply(lambda row: row[p_outnums] * date_wd[row['date']], axis=1)
+        time_in_mean_w = train_data_range[[gfeature, 'stationID', p_innums]].groupby(['stationID', gfeature]).sum().reset_index()
+        time_in_mean_w.rename(columns={p_innums: paytype+'_preInNums'}, inplace=True)
+        time_out_mean_w = train_data_range[[gfeature, 'stationID', p_outnums]].groupby(['stationID', gfeature]).sum().reset_index()
+        time_out_mean_w.rename(columns={p_outnums: paytype+'_preOutNums'}, inplace=True)
 
         df = train_full[train_full['date']==train_date].merge(time_in_mean_w, how="left", on=["stationID", gfeature])
         df = df.merge(time_out_mean_w, how="left", on=["stationID", gfeature])
@@ -240,19 +243,19 @@ def get_pre_paytype_sts(train_full, test, pre_day, gfeature, paytype):
     date_wd = {}
     for d, w in zip(train_dates, date_wl):
         date_wd[d] = w
-    time_in_max = train_data_range[[gfeature, 'stationID', paytype + '_inNums']].groupby(['stationID', gfeature]).max().reset_index().rename(columns={'inNums': paytype + '_inMax'})
-    time_in_min = train_data_range[[gfeature, 'stationID', paytype + '_inNums']].groupby(['stationID', gfeature]).min().reset_index().rename(columns={'inNums': paytype + '_inMin'})
-    time_in_mean = train_data_range[[gfeature, 'stationID', paytype + '_inNums']].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={'inNums': paytype + '_inMean'})
-    time_out_max = train_data_range[[gfeature, 'stationID', paytype + '_outNums']].groupby(['stationID', gfeature]).max().reset_index().rename(columns={'outNums': paytype + '_outMax'})
-    time_out_min = train_data_range[[gfeature, 'stationID', paytype + '_outNums']].groupby(['stationID', gfeature]).min().reset_index().rename(columns={'outNums': paytype + '_outMin'})
-    time_out_mean = train_data_range[[gfeature, 'stationID', paytype + '_outNums']].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={'outNums': paytype + '_outMean'})
+    time_in_max = train_data_range[[gfeature, 'stationID', p_innums]].groupby(['stationID', gfeature]).max().reset_index().rename(columns={p_innums: paytype + '_inMax'})
+    time_in_min = train_data_range[[gfeature, 'stationID', p_innums]].groupby(['stationID', gfeature]).min().reset_index().rename(columns={p_innums: paytype + '_inMin'})
+    time_in_mean = train_data_range[[gfeature, 'stationID', p_innums]].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={p_innums: paytype + '_inMean'})
+    time_out_max = train_data_range[[gfeature, 'stationID', p_outnums]].groupby(['stationID', gfeature]).max().reset_index().rename(columns={p_outnums: paytype + '_outMax'})
+    time_out_min = train_data_range[[gfeature, 'stationID', p_outnums]].groupby(['stationID', gfeature]).min().reset_index().rename(columns={p_outnums: paytype + '_outMin'})
+    time_out_mean = train_data_range[[gfeature, 'stationID', p_outnums]].groupby(['stationID', gfeature]).mean().reset_index().rename(columns={p_outnums: paytype + '_outMean'})
 
-    train_data_range[paytype+'_inNums'] = train_data_range.apply(lambda row: row[paytype+'_inNums'] * date_wd[row['date']], axis=1)
-    train_data_range[paytype+'_outNums'] = train_data_range.apply(lambda row: row[paytype+'_outNums'] * date_wd[row['date']], axis=1)
-    time_in_mean_w = train_data_range[[gfeature, 'stationID', paytype+'_inNums']].groupby(['stationID', gfeature]).sum().reset_index()
-    time_in_mean_w.rename(columns={paytype+'_inNums': paytype+'_preInNums'}, inplace=True)
-    time_out_mean_w = train_data_range[[gfeature, 'stationID', paytype+'_outNums']].groupby(['stationID', gfeature]).sum().reset_index()
-    time_out_mean_w.rename(columns={paytype+'_outNums': paytype+'_preOutNums'}, inplace=True)
+    train_data_range[p_innums] = train_data_range.apply(lambda row: row[p_innums] * date_wd[row['date']], axis=1)
+    train_data_range[p_outnums] = train_data_range.apply(lambda row: row[p_outnums] * date_wd[row['date']], axis=1)
+    time_in_mean_w = train_data_range[[gfeature, 'stationID', p_innums]].groupby(['stationID', gfeature]).sum().reset_index()
+    time_in_mean_w.rename(columns={p_innums: paytype+'_preInNums'}, inplace=True)
+    time_out_mean_w = train_data_range[[gfeature, 'stationID', p_outnums]].groupby(['stationID', gfeature]).sum().reset_index()
+    time_out_mean_w.rename(columns={p_outnums: paytype+'_preOutNums'}, inplace=True)
 
     test = test.merge(time_in_mean_w, how="left", on=["stationID", gfeature])
     test = test.merge(time_out_mean_w, how="left", on=["stationID", gfeature])
@@ -286,13 +289,14 @@ def feature_processing(train, test, train_full):
     """
         preInNums,preOutNums,inMax,outMax,inMin,outMin,inMean,outMean
     """
-    train_pay, test_pay = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p0")
-    print(train_pay.columns)
     #train_hour, test_hour = get_predate_sts(train_full, test, pre_day=7, gfeature='hour')
     train, test_7d = get_predate_sts(train_full, test, pre_day=7, gfeature='time')
     sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean']
     train_14d, test_14d = get_predate_sts(train_full, test, pre_day=14, gfeature='time')
-
+    train_pay0, test_pay0 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p0")
+    train_pay1, test_pay1 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p1")
+    train_pay2, test_pay2 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p2")
+    train_pay3, test_pay3 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p3")
     test = test_7d
     for sf in sts_feature:
         train[sf + '_14d'] = train_14d[sf]
@@ -302,8 +306,17 @@ def feature_processing(train, test, train_full):
     #     test[sf + '_hour'] = test_hour[sf]
     train_pay, test_pay = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p0")
     for sf in sts_feature:
-        train[sf + '_p0'] = train_pay['p0_'+sf]
-        test[sf + '_p0'] = test_pay['p0_'+sf]
+        train['p0_'+sf] = train_pay0['p0_'+sf]
+        test['p0_'+sf] = test_pay0['p0_'+sf]
+
+        train['p1_' + sf] = train_pay1['p1_' + sf]
+        test['p1_' + sf] = test_pay1['p1_' + sf]
+
+        train['p2_' + sf] = train_pay2['p2_' + sf]
+        test['p2_' + sf] = test_pay2['p2_' + sf]
+
+        train['p3_' + sf] = train_pay3['p3_' + sf]
+        test['p3_' + sf] = test_pay3['p3_' + sf]
 
 
     train['7d_14d_indiff'] = train['inMax']-train['inMax_14d']

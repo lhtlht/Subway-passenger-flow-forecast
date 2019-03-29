@@ -46,7 +46,7 @@ if __name__ == "__main__":
     #训练模型
     train,test = load_data()
 
-    is_model = True
+    is_model = False
     if is_model:
         model_test = train[train['date']=='2019-01-28']
         model_test.rename(columns={'inNums': 'realInNums', 'outNums': 'realOutNums'}, inplace=True)
@@ -74,7 +74,7 @@ if __name__ == "__main__":
         else:
             features = ['stationID', 'startTime', 'endTime', 'inNums', 'outNums']
             test = test[features]
-            test.to_csv(f"submit/subway_flow_{rmodel}.csv", encoding="utf-8", index=False)
+            test.to_csv(f"submit/subway_flow_{rmodel}_v2.csv", encoding="utf-8", index=False)
 """
 baseline:  offline-in_mae in_mae 14.574074074074074 out_mae 16.256601508916322 in_out_mae 15.415337791495197,线上15.1778
 07开始统计-in_mae 13.989540466392318 out_mae 14.90809327846365 in_out_mae 14.448816872427983,线上13.2032
@@ -89,10 +89,14 @@ in_mae 14.1440329218107 out_mae 14.861882716049383 in_out_mae 14.502957818930042
 http://www.tianqihoubao.com/lishi/hangzhou/month/201901.html  天气数据
 
 
-lgb:in_mae 14.21656378600823 out_mae 14.504372427983538 in_out_mae 14.360468106995885
-xgb:in_mae 14.160579561042525 out_mae 14.334362139917696 in_out_mae 14.24747085048011
 
-xgb:
+lgb:in_mae 14.21656378600823 out_mae 14.504372427983538 in_out_mae 14.360468106995885 lgb+ts+xgb 12.84
+xgb:in_mae 14.160579561042525 out_mae 14.334362139917696 in_out_mae 14.24747085048011 线上12.96 
+
+lgb:('in_mae', 14.094221536351165, 'out_mae', 14.36531207133059, 'in_out_mae', 14.229766803840878)
+in_mae 13.944787379972565 out_mae 14.298353909465021 in_out_mae 14.121570644718794
+xgb:('in_mae', 14.120627572016462, 'out_mae', 14.219564471879286, 'in_out_mae', 14.170096021947874)
+in_mae 14.030435528120714 out_mae 14.131772976680384 in_out_mae 14.08110425240055
 """
 
 

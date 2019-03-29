@@ -127,9 +127,9 @@ def reg_model(model_train, test, model_type, is_model):
     test.reset_index(inplace=True)
     print(model_train.head())
 
-    features = ['hour', 'minute', 'shift', 'is_shift', 'preInNums', 'preOutNums', 'inMax', 'outMax',
+    features = ['hour', 'minute', 'weekday', 'shift', 'is_shift', 'preInNums', 'preOutNums', 'inMax', 'outMax',
                  'inMax_14d',  'outMax_14d', '7d_14d_indiff', '7d_14d_outdiff',
-                 'inMax_p0', 'outMax_p0']
+                 'p0_inMax', 'p0_outMax', 'p2_inMax', 'p2_outMax']
     sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean',]
     onehot_features = ['stationID', 'time', 'lineID', 'lineSort']
     combine = pd.concat([model_train, test], axis=0)
