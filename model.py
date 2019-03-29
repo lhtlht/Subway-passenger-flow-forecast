@@ -129,8 +129,8 @@ def reg_model(model_train, test, model_type, is_model):
 
     features = ['hour', 'minute', 'shift', 'is_shift', 'preInNums', 'preOutNums', 'inMax', 'outMax',
                  'inMax_14d',  'outMax_14d', '7d_14d_indiff', '7d_14d_outdiff',
-                 ]
-    sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean']
+                 'inMax_p0', 'outMax_p0']
+    sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean',]
     onehot_features = ['stationID', 'time', 'lineID', 'lineSort']
     combine = pd.concat([model_train, test], axis=0)
     combine = multi_column_LabelEncoder(combine, onehot_features, rename=True)

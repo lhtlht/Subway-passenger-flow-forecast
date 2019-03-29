@@ -14,10 +14,9 @@ TEMP_DATA_PATH = "./temp_data/"
 STATION_NUM = 81
 
 def load_data():
-    train = pd.read_csv(TEMP_DATA_PATH+"inout_train_full.csv", encoding="utf-8")
+    train = pd.read_csv(TEMP_DATA_PATH+"inout_train_full_paytype.csv", encoding="utf-8")
     station_info = pd.read_csv(TEMP_DATA_PATH + "station_fill.csv", encoding="utf-8")
     date_info = pd.read_csv(TEMP_DATA_PATH + "date_fill.csv", encoding="utf-8")
-
     train['date'] = train.apply(lambda row: row['startTime'].split(' ')[0], axis=1)
     train['time'] = train.apply(lambda row: row['startTime'].split(' ')[1], axis=1)
     train = train.merge(station_info, how="left", on=['stationID'])
@@ -46,7 +45,8 @@ if __name__ == "__main__":
     '''
     #训练模型
     train,test = load_data()
-    is_model = False
+
+    is_model = True
     if is_model:
         model_test = train[train['date']=='2019-01-28']
         model_test.rename(columns={'inNums': 'realInNums', 'outNums': 'realOutNums'}, inplace=True)
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     model_train = model_train[model_train['date'] >= '2019-01-14']
 
     #reg_model_list = ['ts', 'lgb', 'xgb']
-    reg_model_list = ['xgb']
+    reg_model_list = ['lgb']
     for rmodel in reg_model_list:
         if rmodel == 'ts':
             test = model.weightTimeModel(model_train, test, is_model)
