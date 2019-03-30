@@ -27,8 +27,7 @@ def load_data():
     test['date'] = ['2019-01-29' for i in range(test.shape[0])]
     test = test.merge(station_info, how="left", on=['stationID'])
     test = test.merge(date_info, how="left", on=['date'])
-    return train, test[["stationID","startTime","endTime","time", "date", "lineID", "lineSort", "shift", "is_shift",
-                        "weather1", "weather2", "temperature_max", "temperature_min", "Wind"]]
+    return train, test
 
 def model_eval(predict_label, real_label):
     sum = 0
@@ -46,7 +45,8 @@ if __name__ == "__main__":
     #训练模型
     train,test = load_data()
 
-    is_model = False
+    is_model = True
+    is_model_save = False
     if is_model:
         model_test = train[train['date']=='2019-01-28']
         model_test.rename(columns={'inNums': 'realInNums', 'outNums': 'realOutNums'}, inplace=True)
@@ -57,16 +57,25 @@ if __name__ == "__main__":
     train_full = model_train
     model_train = model_train[model_train['date'] >= '2019-01-14']
 
-    #reg_model_list = ['ts', 'lgb', 'xgb']
-    reg_model_list = ['lgb']
+    #reg_model_list = ['ts', 'lgb', 'xgb', 'ctb' ,'rf']
+    reg_model_list = ['rf']
     for rmodel in reg_model_list:
         if rmodel == 'ts':
             test = model.weightTimeModel(model_train, test, is_model)
         else:
             print("开始特征处理")
-            model_train, test = feature_processing(model_train, test, train_full)
+            if is_model_save:
+                model_train, test = feature_processing(model_train, test, train_full)
+                model_train.to_csv(TEMP_DATA_PATH+"TRAIN.csv", encoding="utf-8", index=False)
+                test.to_csv(TEMP_DATA_PATH+"TEST.csv", encoding="utf-8", index=False)
+            else:
+                model_train = pd.read_csv(TEMP_DATA_PATH + "TRAIN.csv", encoding="utf-8")
+                test = pd.read_csv(TEMP_DATA_PATH + "TEST.csv", encoding="utf-8")
             print("开始训练")
-            test = model.reg_model(model_train, test, rmodel, is_model)
+            if rmodel == 'ctb':
+                train, test = model.reg_ctb_model(model_train, test, rmodel, is_model)
+            else:
+                train, test = model.reg_model(model_train, test, rmodel, is_model)
         if is_model:
             in_mae = model_eval(test['inNums'], test['realInNums'])
             out_mae = model_eval(test['outNums'], test['realOutNums'])
@@ -74,7 +83,8 @@ if __name__ == "__main__":
         else:
             features = ['stationID', 'startTime', 'endTime', 'inNums', 'outNums']
             test = test[features]
-            test.to_csv(f"submit/subway_flow_{rmodel}_v2.csv", encoding="utf-8", index=False)
+            test.to_csv(f"submit/subway_flow_{rmodel}_final.csv", encoding="utf-8", index=False)
+            train.to_csv(f"submit/subway_flow_{rmodel}_final_train.csv", encoding="utf-8", index=False)
 """
 baseline:  offline-in_mae in_mae 14.574074074074074 out_mae 16.256601508916322 in_out_mae 15.415337791495197,线上15.1778
 07开始统计-in_mae 13.989540466392318 out_mae 14.90809327846365 in_out_mae 14.448816872427983,线上13.2032
@@ -94,9 +104,12 @@ lgb:in_mae 14.21656378600823 out_mae 14.504372427983538 in_out_mae 14.3604681069
 xgb:in_mae 14.160579561042525 out_mae 14.334362139917696 in_out_mae 14.24747085048011 线上12.96 
 
 lgb:('in_mae', 14.094221536351165, 'out_mae', 14.36531207133059, 'in_out_mae', 14.229766803840878)
-in_mae 13.944787379972565 out_mae 14.298353909465021 in_out_mae 14.121570644718794
+in_mae 13.89849108367627 out_mae 14.258916323731139 in_out_mae 14.078703703703704
 xgb:('in_mae', 14.120627572016462, 'out_mae', 14.219564471879286, 'in_out_mae', 14.170096021947874)
-in_mae 14.030435528120714 out_mae 14.131772976680384 in_out_mae 14.08110425240055
+in_mae 13.952932098765432 out_mae 14.127914951989027 in_out_mae 14.040423525377228
+
+ctb
+in_mae 13.957661920631585 out_mae 14.131122052792142 in_out_mae 14.044391986711863
 """
 
 

@@ -1,4 +1,5 @@
 import datetime
+import time
 import pandas as pd
 import numpy as np
 import sys
@@ -182,7 +183,7 @@ def get_predate_sts(train_full, test, pre_day, gfeature):
 def get_pre_paytype_sts(train_full, test, pre_day, gfeature, paytype):
     date_mean = pd.DataFrame()
     train_dates_list = list(train_full.groupby('date').size().index)
-    print("date mean......", gfeature, pre_day)
+    print("date mean......", gfeature, pre_day,paytype)
     p_innums = paytype + '_inNums'
     p_outnums = paytype + '_outNums'
     for train_date in train_dates_list[13:]:
@@ -267,12 +268,32 @@ def get_pre_paytype_sts(train_full, test, pre_day, gfeature, paytype):
     test = test.merge(time_in_min, how="left", on=["stationID", gfeature])
     return date_mean, test
 
+def is_belong_timerange(tt, stime, etime):
+    stime = stime.split(' ')[1]
+    etime = etime.split(' ')[1]
+    if(len(tt)<5):
+        tt = '0'+tt
+    if tt!=tt:
+        return 0
+    if tt>=stime and tt<=etime:
+        return 1
+    else:
 
+        return 0
+
+def first_end_(data):
+    data['is_first1'] = data.apply(lambda row: is_belong_timerange(row['first_1'], row['startTime'], row['endTime']),axis=1)
+    data['is_first2'] = data.apply(lambda row: is_belong_timerange(row['first_2'], row['startTime'], row['endTime']),axis=1)
+    data['is_last1'] = data.apply(lambda row: is_belong_timerange(row['last_1'], row['startTime'], row['endTime']),axis=1)
+    data['is_last2'] = data.apply(lambda row: is_belong_timerange(row['last_2'], row['startTime'], row['endTime']),axis=1)
+    return data
 def feature_processing(train, test, train_full):
     train.reset_index(inplace=True)
     test.reset_index(inplace=True)
-
     train_full['hour'] = train_full.apply(lambda row: int(row['time'].split(':')[0]), axis=1)
+    # 首班 晚班特征
+    train = first_end_(train)
+    test = first_end_(test)
 
     train['hour'] = train.apply(lambda row: int(row['time'].split(':')[0]), axis=1)
     train['minute'] = train.apply(lambda row: int(row['time'].split(':')[1]), axis=1)
@@ -294,9 +315,16 @@ def feature_processing(train, test, train_full):
     sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean']
     train_14d, test_14d = get_predate_sts(train_full, test, pre_day=14, gfeature='time')
     train_pay0, test_pay0 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p0")
-    train_pay1, test_pay1 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p1")
+    #train_pay1, test_pay1 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p1")
     train_pay2, test_pay2 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p2")
-    train_pay3, test_pay3 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p3")
+    #train_pay3, test_pay3 = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p3")
+
+    train_pay0_14, test_pay0_14 = get_pre_paytype_sts(train_full, test, pre_day=14, gfeature='time', paytype="p0")
+    train_pay1_14, test_pay1_14 = get_pre_paytype_sts(train_full, test, pre_day=14, gfeature='time', paytype="p1")
+    train_pay2_14, test_pay2_14 = get_pre_paytype_sts(train_full, test, pre_day=14, gfeature='time', paytype="p2")
+    train_pay3_14, test_pay3_14 = get_pre_paytype_sts(train_full, test, pre_day=14, gfeature='time', paytype="p3")
+
+
     test = test_7d
     for sf in sts_feature:
         train[sf + '_14d'] = train_14d[sf]
@@ -304,19 +332,29 @@ def feature_processing(train, test, train_full):
     # for sf in sts_feature:
     #     train[sf + '_hour'] = train_hour[sf]
     #     test[sf + '_hour'] = test_hour[sf]
-    train_pay, test_pay = get_pre_paytype_sts(train_full, test, pre_day=7, gfeature='time', paytype="p0")
     for sf in sts_feature:
         train['p0_'+sf] = train_pay0['p0_'+sf]
         test['p0_'+sf] = test_pay0['p0_'+sf]
 
-        train['p1_' + sf] = train_pay1['p1_' + sf]
-        test['p1_' + sf] = test_pay1['p1_' + sf]
+        # train['p1_' + sf] = train_pay1['p1_' + sf]
+        # test['p1_' + sf] = test_pay1['p1_' + sf]
 
         train['p2_' + sf] = train_pay2['p2_' + sf]
         test['p2_' + sf] = test_pay2['p2_' + sf]
 
-        train['p3_' + sf] = train_pay3['p3_' + sf]
-        test['p3_' + sf] = test_pay3['p3_' + sf]
+        # train['p3_' + sf] = train_pay3['p3_' + sf]
+        # test['p3_' + sf] = test_pay3['p3_' + sf]
+        # train['hourp0_' + sf] = train_pay0_hour['p0_' + sf]
+        # test['hourp0_' + sf] = test_pay0_hour['p0_' + sf]
+
+        train['p014_' + sf] = train_pay0_14['p0_' + sf]
+        test['p014_' + sf] = test_pay0_14['p0_' + sf]
+        train['p114_' + sf] = train_pay1_14['p1_' + sf]
+        test['p114_' + sf] = test_pay1_14['p1_' + sf]
+        train['p214_' + sf] = train_pay2_14['p2_' + sf]
+        test['p214_' + sf] = test_pay2_14['p2_' + sf]
+        train['p314_' + sf] = train_pay3_14['p3_' + sf]
+        test['p314_' + sf] = test_pay3_14['p3_' + sf]
 
 
     train['7d_14d_indiff'] = train['inMax']-train['inMax_14d']

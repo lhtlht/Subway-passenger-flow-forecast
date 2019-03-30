@@ -5,6 +5,7 @@ from datetime import datetime
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import Imputer
 from scipy import sparse
 lgb_params = {
     'boosting_type': 'gbdt',
@@ -43,6 +44,27 @@ xgb_params = {
         'alpha': 1,
         'verbose': 1
     }
+ctb_params = {
+    'n_estimators': 10000,
+    'learning_rate': 0.01,
+    'random_seed': 4590,
+    'reg_lambda': 0.08,
+    'subsample': 0.7,
+    'bootstrap_type': 'Bernoulli',
+    'boosting_type': 'Plain',
+    'one_hot_max_size': 10,
+    'rsm': 0.5,
+    'leaf_estimation_iterations': 5,
+    'use_best_model': True,
+    'max_depth': 6,
+    'verbose': -1,
+    'thread_count': 4
+}
+rf_params = {
+'n_estimators': 1000,
+'n_jobs': 4,
+'random_state': 2019
+}
 def get_weight_list(num_list, test_week):
     sum_l = sum(num_list)
     num_list2 = []
@@ -100,12 +122,10 @@ def weightTimeModel(model_train, test, is_model):
 
     test = test.merge(time_in_mean, how="left", on=["stationID", "time"])
     test = test.merge(time_out_mean, how="left", on=["stationID", "time"])
-    print(test.columns)
     test['inNums'] = test.apply(lambda row: round(row['inNums'],0), axis=1)
     test['outNums'] = test.apply(lambda row: round(row['outNums'], 0), axis=1)
     test = test.drop(columns=['time'])
     test.fillna(0, inplace=True)
-    print(test.info())
     return test
 
 def multi_column_LabelEncoder(df,columns,rename=True):
@@ -120,18 +140,24 @@ def multi_column_LabelEncoder(df,columns,rename=True):
     return df
 
 
+
 def reg_model(model_train, test, model_type, is_model):
     import lightgbm as lgb
     from xgboost import XGBRegressor
+    from sklearn.ensemble import RandomForestRegressor
     model_train.reset_index(inplace=True)
     test.reset_index(inplace=True)
-    print(model_train.head())
-
-    features = ['hour', 'minute', 'weekday', 'shift', 'is_shift', 'preInNums', 'preOutNums', 'inMax', 'outMax',
+    if model_type == 'rf':
+        model_train.fillna(0, inplace=True)
+    features = ['hour', 'minute', 'weekday',
+                'shift', 'is_shift',
+                'preInNums', 'preOutNums', 'inMax', 'outMax',
                  'inMax_14d',  'outMax_14d', '7d_14d_indiff', '7d_14d_outdiff',
-                 'p0_inMax', 'p0_outMax', 'p2_inMax', 'p2_outMax']
+                 'p0_inMax', 'p0_outMax', 'p2_inMax', 'p2_outMax',
+                'p014_inMax', 'p014_outMax','p214_inMax', 'p214_outMax',
+                'is_first1','is_first2','is_last1','is_last2']
     sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean',]
-    onehot_features = ['stationID', 'time', 'lineID', 'lineSort']
+    onehot_features = ['stationID', 'time', 'lineID',  'lineSort','lineSortD']
     combine = pd.concat([model_train, test], axis=0)
     combine = multi_column_LabelEncoder(combine, onehot_features, rename=True)
     #one hot 处理
@@ -147,7 +173,9 @@ def reg_model(model_train, test, model_type, is_model):
     train_x = sparse.hstack((train_x_onehot, train_x_original)).tocsr()
     test_x = sparse.hstack((test_x_onehot, test_x_original)).tocsr()
 
+    imp = Imputer(missing_values='NaN', strategy='most_frequent', axis=0)
 
+    train_x = imp.fit_transform(train_x)
     # print(model_train[features].head())
     # train_x = model_train[features]
     train_y_in = model_train['inNums']
@@ -157,6 +185,7 @@ def reg_model(model_train, test, model_type, is_model):
     n_fold = 5
     count_fold = 0
     preds_list = list()
+    oof_in = np.zeros(train_x.shape[0])
     kfolder = KFold(n_splits=n_fold, shuffle=True, random_state=2019)
     kfold = kfolder.split(train_x, train_y_in)
     for train_index, vali_index in kfold:
@@ -172,16 +201,21 @@ def reg_model(model_train, test, model_type, is_model):
             lgb_model = lgb.LGBMRegressor(**lgb_params)
             lgb_model = lgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
                                       early_stopping_rounds=200, verbose=False, eval_metric="l2")
-            k_pred_12 = lgb_model.predict(k_x_vali, num_iteration=lgb_model.best_iteration_)
+            k_pred = lgb_model.predict(k_x_vali, num_iteration=lgb_model.best_iteration_)
             pred = lgb_model.predict(test_x, num_iteration=lgb_model.best_iteration_)
-        else:
+        elif model_type == 'xgb':
             xgb_model = XGBRegressor(**xgb_params)
             xgb_model = xgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
                                       early_stopping_rounds=200, verbose=False)
-            k_pred_l2 = xgb_model.predict(k_x_vali)
+            k_pred = xgb_model.predict(k_x_vali)
             pred = xgb_model.predict(test_x)
+        elif model_type == 'rf':
+            rf_model = RandomForestRegressor(n_estimators=100, max_depth=3, criterion="mae",n_jobs=-1,random_state=2019)
+            model = rf_model.fit(k_x_train, k_y_train)
+            k_pred = rf_model.predict(k_x_vali)
+            pred = rf_model.predict(test_x)
         preds_list.append(pred)
-
+        oof_in[vali_index] = k_pred
     preds_columns = ['preds_{id}'.format(id=i) for i in range(n_fold)]
     preds_df = pd.DataFrame(data=preds_list)
     preds_df = preds_df.T
@@ -191,6 +225,7 @@ def reg_model(model_train, test, model_type, is_model):
 #---------------------------------------------------------------------------------------------------------------------
 
     preds_list = list()
+    oof_out = np.zeros(train_x.shape[0])
     kfolder = KFold(n_splits=n_fold, shuffle=True, random_state=2019)
     kfold = kfolder.split(train_x, train_y_out)
     for train_index, vali_index in kfold:
@@ -209,15 +244,15 @@ def reg_model(model_train, test, model_type, is_model):
             lgb_model = lgb.LGBMRegressor(**lgb_params)
             lgb_model = lgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
                                       early_stopping_rounds=200, verbose=False, eval_metric="l2")
-            k_pred_12 = lgb_model.predict(k_x_vali, num_iteration=lgb_model.best_iteration_)
+            k_pred = lgb_model.predict(k_x_vali, num_iteration=lgb_model.best_iteration_)
             pred = lgb_model.predict(test_x, num_iteration=lgb_model.best_iteration_)
         else:
             xgb_model = XGBRegressor(**xgb_params)
             xgb_model = xgb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
                                       early_stopping_rounds=200, verbose=False)
-            k_pred_l2 = xgb_model.predict(k_x_vali)
+            k_pred = xgb_model.predict(k_x_vali)
             pred = xgb_model.predict(test_x)
-
+        oof_out[vali_index] = k_pred
         preds_list.append(pred)
 
     preds_columns = ['preds_{id}'.format(id=i) for i in range(n_fold)]
@@ -232,15 +267,137 @@ def reg_model(model_train, test, model_type, is_model):
     #结果修正
     test.loc[test.inNums < 1,'inNums'] = 0
     test.loc[test.outNums < 2, 'outNums'] = 0
-    test['inNums'] = test.apply(lambda row: round(row['inNums'], 0), axis=1)
-    test['outNums'] = test.apply(lambda row: round(row['outNums'], 0), axis=1)
-    # test['inNums'] = test.apply(lambda row: round(row['inNums'], 0), axis=1)
-    # test['outNums'] = test.apply(lambda row: round(row['outNums'], 0), axis=1)
+    #test['inNums'] = test.apply(lambda row: round(row['inNums'], 0), axis=1)
+    #test['outNums'] = test.apply(lambda row: round(row['outNums'], 0), axis=1)
+
     if is_model:
         test = test[['stationID', 'startTime', 'endTime', 'inNums', 'outNums', 'realInNums', 'realOutNums']]
+        train = 0
     else:
+        train = pd.DataFrame()
+        train['date'] = model_train['date']
+        train['inNums'] = train_y_in
+        train['outNums'] = train_y_out
+        train[model_type+'_prein'] = oof_in
+        train[model_type+'_preout'] = oof_out
         test = test[['stationID', 'startTime', 'endTime', 'inNums', 'outNums']]
     test.fillna(0, inplace=True)
-    print(test.info())
-    return test
+    return train, test
+
+
+def reg_ctb_model(model_train, test, model_type, is_model):
+    from catboost import CatBoostRegressor
+    model_train.reset_index(inplace=True)
+    test.reset_index(inplace=True)
+
+    features = ['hour', 'minute', 'weekday',
+                'shift', 'is_shift',
+                'preInNums', 'preOutNums', 'inMax', 'outMax',
+                 'inMax_14d',  'outMax_14d', '7d_14d_indiff', '7d_14d_outdiff',
+                 'p0_inMax', 'p0_outMax', 'p2_inMax', 'p2_outMax',
+                'p014_inMax', 'p014_outMax','p214_inMax', 'p214_outMax',
+                'is_first1','is_first2','is_last1','is_last2']
+    sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean',]
+    onehot_features = ['stationID', 'time', 'lineID',  'lineSort','lineSortD']
+    combine = pd.concat([model_train, test], axis=0)
+    combine = multi_column_LabelEncoder(combine, onehot_features, rename=True)
+    #one hot 处理
+    onehoter = OneHotEncoder()
+    X_onehot = onehoter.fit_transform(combine[onehot_features])
+    train_x_onehot = X_onehot.tocsr()[:model_train.shape[0]].tocsr()
+    test_x_onehot = X_onehot.tocsr()[model_train.shape[0]:].tocsr()
+
+    train_x_original = combine[features][:model_train.shape[0]]
+    test_x_original = combine[features][model_train.shape[0]:]
+    print(train_x_original.shape)
+    print(train_x_onehot.shape)
+    train_x = sparse.hstack((train_x_onehot, train_x_original)).toarray()
+    test_x = sparse.hstack((test_x_onehot, test_x_original)).toarray()
+    print(type(train_x))
+
+    # print(model_train[features].head())
+    # train_x = model_train[features]
+    train_y_in = model_train['inNums']
+    train_y_out = model_train['outNums']
+    # test_x = test[features]
+
+    n_fold = 5
+    count_fold = 0
+    preds_list = list()
+    oof_in = np.zeros(train_x.shape[0])
+    kfolder = KFold(n_splits=n_fold, shuffle=True, random_state=2019)
+    kfold = kfolder.split(train_x, train_y_in)
+    for train_index, vali_index in kfold:
+        print("training......fold",count_fold)
+        count_fold = count_fold + 1
+        k_x_train = train_x[train_index]
+        k_y_train = train_y_in.loc[train_index]
+        k_x_vali = train_x[vali_index]
+        k_y_vali = train_y_in.loc[vali_index]
+
+        ctb_model = CatBoostRegressor(**ctb_params)
+        ctb_model = ctb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
+                                  early_stopping_rounds=200, verbose=False)
+        k_pred = ctb_model.predict(k_x_vali)
+        pred = ctb_model.predict(test_x)
+
+        preds_list.append(pred)
+        oof_in[vali_index] = k_pred
+    preds_columns = ['preds_{id}'.format(id=i) for i in range(n_fold)]
+    preds_df = pd.DataFrame(data=preds_list)
+    preds_df = preds_df.T
+    preds_df.columns = preds_columns
+    preds_in = list(preds_df.mean(axis=1))
+
+#---------------------------------------------------------------------------------------------------------------------
+
+    preds_list = list()
+    oof_out = np.zeros(train_x.shape[0])
+    kfolder = KFold(n_splits=n_fold, shuffle=True, random_state=2019)
+    kfold = kfolder.split(train_x, train_y_out)
+    for train_index, vali_index in kfold:
+        print("training......fold",count_fold)
+        count_fold = count_fold + 1
+        k_x_train = train_x[train_index]
+        k_y_train = train_y_out.loc[train_index]
+        k_x_vali = train_x[vali_index]
+        k_y_vali = train_y_out.loc[vali_index]
+
+        ctb_model = CatBoostRegressor(**ctb_params)
+        ctb_model = ctb_model.fit(k_x_train, k_y_train, eval_set=[(k_x_train, k_y_train), (k_x_vali, k_y_vali)],
+                                  early_stopping_rounds=200, verbose=False)
+        k_pred = ctb_model.predict(k_x_vali)
+        pred = ctb_model.predict(test_x)
+
+        oof_out[vali_index] = k_pred
+        preds_list.append(pred)
+
+    preds_columns = ['preds_{id}'.format(id=i) for i in range(n_fold)]
+    preds_df = pd.DataFrame(data=preds_list)
+    preds_df = preds_df.T
+    preds_df.columns = preds_columns
+    preds_out = list(preds_df.mean(axis=1))
+
+    #输出结果
+    test['inNums'] = preds_in
+    test['outNums'] = preds_out
+    #结果修正
+    test.loc[test.inNums < 1,'inNums'] = 0
+    test.loc[test.outNums < 2, 'outNums'] = 0
+    #test['inNums'] = test.apply(lambda row: round(row['inNums'], 0), axis=1)
+    #test['outNums'] = test.apply(lambda row: round(row['outNums'], 0), axis=1)
+
+    if is_model:
+        test = test[['stationID', 'startTime', 'endTime', 'inNums', 'outNums', 'realInNums', 'realOutNums']]
+        train = 0
+    else:
+        train = pd.DataFrame()
+        train['date'] = model_train['date']
+        train['inNums'] = train_y_in
+        train['outNums'] = train_y_out
+        train[model_type+'_prein'] = oof_in
+        train[model_type+'_preout'] = oof_out
+        test = test[['stationID', 'startTime', 'endTime', 'inNums', 'outNums']]
+    test.fillna(0, inplace=True)
+    return train, test
 
