@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import time
+import sys
 from sklearn.linear_model import BayesianRidge
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import RepeatedKFold
@@ -52,16 +52,16 @@ def stacking_mean():
     pre_list_in = []
     pre_list_out = []
 
-    m1 = pd.read_csv("submit/subway_flow_ts.csv", encoding="utf-8")
-    m2 = pd.read_csv("submit/subway_flow_lgb_v3.csv", encoding="utf-8")
-    m3 = pd.read_csv("submit/subway_flow_xgb_v3.csv", encoding="utf-8")
+    m1 = pd.read_csv("submit_B/subway_flow_ts_b.csv", encoding="utf-8")
+    m2 = pd.read_csv("submit_B/subway_flow_lgb_xgb_stacking.csv", encoding="utf-8")
+    m3 = pd.read_csv("submit_B/subway_flow_xgb_b_v1.csv", encoding="utf-8")
 
     pre_list_in.append(m1['inNums'])
     pre_list_in.append(m2['inNums'])
-    pre_list_in.append(m3['inNums'])
+    #pre_list_in.append(m3['inNums'])
     pre_list_out.append(m1['outNums'])
     pre_list_out.append(m2['outNums'])
-    pre_list_out.append(m3['outNums'])
+    #pre_list_out.append(m3['outNums'])
 
     df['stationID'] = m1['stationID']
     df['startTime'] = m1['startTime']
@@ -69,7 +69,7 @@ def stacking_mean():
     df['inNums'] = np.array(pre_list_in).mean(axis=0)
     df['outNums'] = np.array(pre_list_out).mean(axis=0)
 
-    df.to_csv("submit/subway_flow_ts_lgb_xgb_0330_v1.csv", index=False)
+    df.to_csv("submit_B/subway_flow.csv", index=False)
 
 def model_eval(predict_label, real_label):
     sum = 0
@@ -79,28 +79,28 @@ def model_eval(predict_label, real_label):
     return sum/len(predict_label)
 
 if __name__ == "__main__":
-    #stacking_mean()
-
+    stacking_mean()
+    sys.exit(-1)
     stacker = Stacking()
-    reg_models = [ 'xgb', 'lgb', 'ctb']
+    reg_models = [ 'xgb', 'lgb']
     oof_list_in = list()
     predict_list_in = list()
     oof_list_out = list()
     predict_list_out = list()
     labels_in = list()
     labels_out = list()
-    is_model = True
+    is_model = False
     for rm in reg_models:
-        train_data = pd.read_csv(f"submit/subway_flow_{rm}_final_train.csv", encoding="utf-8")
-        test_data = pd.read_csv(f"submit/subway_flow_{rm}_final.csv", encoding="utf-8")
+        train_data = pd.read_csv(f"submit_B/subway_flow_{rm}_final_b_v1.csv", encoding="utf-8")
+        test_data = pd.read_csv(f"submit_B/subway_flow_{rm}_b_v1.csv", encoding="utf-8")
         # 结果修正
         train_data.loc[train_data.inNums < 1, rm+'_prein'] = 0
         train_data.loc[train_data.outNums < 2, rm+'_preout'] = 0
         #train_data[rm+'_prein'] = train_data.apply(lambda row: round(row[rm+'_prein'], 0), axis=1)
         #train_data[rm+'_preout'] = train_data.apply(lambda row: round(row[rm+'_preout'], 0), axis=1)
         if is_model:
-            test_data = train_data[train_data['date']=='2019-01-28']
-            train_data = train_data[train_data['date']!='2019-01-28']
+            test_data = train_data[train_data['date']=='2019-01-26']
+            train_data = train_data[train_data['date']!='2019-01-26']
         oof_list_in.append(train_data[rm+'_prein'])
         oof_list_out.append(train_data[rm+'_preout'])
         if is_model:
@@ -126,7 +126,7 @@ if __name__ == "__main__":
         # 结果修正
         test_stacking.loc[test_stacking.inNums < 1, 'inNums'] = 0
         test_stacking.loc[test_stacking.outNums < 2, 'outNums'] = 0
-        test_stacking.to_csv("submit/subway_flow_lgb_xgb_stacking_v1.csv", index=False)
+        test_stacking.to_csv("submit_B/subway_flow_lgb_xgb_stacking.csv", index=False)
 
 
 

@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import sys
+import math
 from datetime import datetime
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import OneHotEncoder
@@ -92,23 +93,24 @@ def mean_model(model_train, test, train_type="off_line"):
 def weightTimeModel(model_train, test, is_model):
     train_dates = list(model_train.groupby('date').size().index)
     if is_model:
-        test_week = 0
-        test_date = 28
+        test_week = 5
+        test_date = 26
     else:
-        test_week = 1
-        test_date = 29
+        test_week = 6
+        test_date = 27
     train_date_list = []
 
     for date in train_dates:
-        train_date_list.append((test_date - int(date.split('-')[2])) * 2)
-        # if datetime.strptime(date,'%Y-%m-%d').weekday()==test_week:
-        #     train_date_list.append((test_date - int(date.split('-')[2])) * 1.5)
-        # elif datetime.strptime(date,'%Y-%m-%d').weekday()==6:
-        #     train_date_list.append((test_date - int(date.split('-')[2])) * 3)
-        # elif datetime.strptime(date,'%Y-%m-%d').weekday()==5:
-        #     train_date_list.append((test_date - int(date.split('-')[2])) * 2.5)
-        # else:
-        #     train_date_list.append((test_date - int(date.split('-')[2])) * 2)
+        #train_date_list.append((test_date - int(date.split('-')[2])) * 2)
+
+        if datetime.strptime(date,'%Y-%m-%d').weekday()==test_week:
+            train_date_list.append((test_date - int(date.split('-')[2])) * 0.05)
+        elif datetime.strptime(date,'%Y-%m-%d').weekday() in [5,6]:
+            train_date_list.append((test_date - int(date.split('-')[2])) * 0.1)
+        elif datetime.strptime(date,'%Y-%m-%d').weekday() in [0,1,2,3]:
+            train_date_list.append((test_date - int(date.split('-')[2])) * 5)
+        else:
+            train_date_list.append((test_date - int(date.split('-')[2])) * 5)
         #train_date_list.append((test_date - int(date.split('-')[2])) * (datetime.strptime(date,'%Y-%m-%d').weekday()-test_week+2))
     date_wl = get_weight_list(train_date_list, test_week)
     date_wd = {}
@@ -122,6 +124,9 @@ def weightTimeModel(model_train, test, is_model):
 
     test = test.merge(time_in_mean, how="left", on=["stationID", "time"])
     test = test.merge(time_out_mean, how="left", on=["stationID", "time"])
+    # 结果修正
+    test.loc[test.inNums < 1, 'inNums'] = 0
+    test.loc[test.outNums < 1, 'outNums'] = 0
     test['inNums'] = test.apply(lambda row: round(row['inNums'],0), axis=1)
     test['outNums'] = test.apply(lambda row: round(row['outNums'], 0), axis=1)
     test = test.drop(columns=['time'])
@@ -149,6 +154,7 @@ def reg_model(model_train, test, model_type, is_model):
     test.reset_index(inplace=True)
     if model_type == 'rf':
         model_train.fillna(0, inplace=True)
+    """
     features = ['hour', 'minute', 'weekday',
                 'shift', 'is_shift',
                 'preInNums', 'preOutNums', 'inMax', 'outMax',
@@ -156,6 +162,24 @@ def reg_model(model_train, test, model_type, is_model):
                  'p0_inMax', 'p0_outMax', 'p2_inMax', 'p2_outMax',
                 'p014_inMax', 'p014_outMax','p214_inMax', 'p214_outMax',
                 'is_first1','is_first2','is_last1','is_last2']
+    sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean',]
+    onehot_features = ['stationID', 'time', 'lineID',  'lineSort','lineSortD']
+    """
+    features_in = ['hour', 'minute', 'weekday','is_weekday', 'shift', 'is_shift',
+                'preInNums', 'inMin','inMean','inMax',
+                   'p0_inMax','p0_preInNums','p0_inMean','p0_inMin',
+                   'p1_inMax', 'p1_preInNums', 'p1_inMean', 'p1_inMin',
+                   'p2_inMax', 'p2_preInNums', 'p2_inMean', 'p2_inMin',
+                   'p3_inMax', 'p3_preInNums', 'p3_inMean', 'p3_inMin',
+                'is_first1','is_first2','is_last1','is_last2']
+    features_out = ['hour', 'minute', 'weekday', 'is_weekday', 'shift', 'is_shift',
+                   'preOutNums', 'outMin', 'outMean', 'outMax',
+                    'preOutNums_14d', 'outMin_14d', 'outMean_14d', 'outMax_14d',
+                    'p0_outMax', 'p0_preOutNums', 'p0_outMean', 'p0_outMin',
+                    'p1_outMax', 'p1_preOutNums', 'p1_outMean', 'p1_outMin',
+                    'p2_outMax', 'p2_preOutNums', 'p2_outMean', 'p2_outMin',
+                    'p3_outMax', 'p3_preOutNums', 'p3_outMean', 'p3_outMin',
+                   'is_first1', 'is_first2', 'is_last1', 'is_last2']
     sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean',]
     onehot_features = ['stationID', 'time', 'lineID',  'lineSort','lineSortD']
     combine = pd.concat([model_train, test], axis=0)
@@ -166,16 +190,16 @@ def reg_model(model_train, test, model_type, is_model):
     train_x_onehot = X_onehot.tocsr()[:model_train.shape[0]].tocsr()
     test_x_onehot = X_onehot.tocsr()[model_train.shape[0]:].tocsr()
 
-    train_x_original = combine[features][:model_train.shape[0]]
-    test_x_original = combine[features][model_train.shape[0]:]
+    train_x_original = combine[features_in][:model_train.shape[0]]
+    test_x_original = combine[features_in][model_train.shape[0]:]
     print(train_x_original.shape)
     print(train_x_onehot.shape)
     train_x = sparse.hstack((train_x_onehot, train_x_original)).tocsr()
     test_x = sparse.hstack((test_x_onehot, test_x_original)).tocsr()
 
-    imp = Imputer(missing_values='NaN', strategy='most_frequent', axis=0)
+    #imp = Imputer(missing_values='NaN', strategy='most_frequent', axis=0)
+    #train_x = imp.fit_transform(train_x)
 
-    train_x = imp.fit_transform(train_x)
     # print(model_train[features].head())
     # train_x = model_train[features]
     train_y_in = model_train['inNums']
@@ -224,6 +248,12 @@ def reg_model(model_train, test, model_type, is_model):
 
 #---------------------------------------------------------------------------------------------------------------------
 
+    train_x_original = combine[features_out][:model_train.shape[0]]
+    test_x_original = combine[features_out][model_train.shape[0]:]
+    print(train_x_original.shape)
+    print(train_x_onehot.shape)
+    train_x = sparse.hstack((train_x_onehot, train_x_original)).tocsr()
+    test_x = sparse.hstack((test_x_onehot, test_x_original)).tocsr()
     preds_list = list()
     oof_out = np.zeros(train_x.shape[0])
     kfolder = KFold(n_splits=n_fold, shuffle=True, random_state=2019)
@@ -260,7 +290,7 @@ def reg_model(model_train, test, model_type, is_model):
     preds_df = preds_df.T
     preds_df.columns = preds_columns
     preds_out = list(preds_df.mean(axis=1))
-
+# ---------------------------------------------------------------------------------------------------------------------
     #输出结果
     test['inNums'] = preds_in
     test['outNums'] = preds_out
@@ -280,6 +310,7 @@ def reg_model(model_train, test, model_type, is_model):
         train['outNums'] = train_y_out
         train[model_type+'_prein'] = oof_in
         train[model_type+'_preout'] = oof_out
+        #train[model_type + '_preout'] = np.zeros(train.shape[0])
         test = test[['stationID', 'startTime', 'endTime', 'inNums', 'outNums']]
     test.fillna(0, inplace=True)
     return train, test
@@ -292,11 +323,7 @@ def reg_ctb_model(model_train, test, model_type, is_model):
 
     features = ['hour', 'minute', 'weekday',
                 'shift', 'is_shift',
-                'preInNums', 'preOutNums', 'inMax', 'outMax',
-                 'inMax_14d',  'outMax_14d', '7d_14d_indiff', '7d_14d_outdiff',
-                 'p0_inMax', 'p0_outMax', 'p2_inMax', 'p2_outMax',
-                'p014_inMax', 'p014_outMax','p214_inMax', 'p214_outMax',
-                'is_first1','is_first2','is_last1','is_last2']
+                ]
     sts_feature = ['preInNums', 'preOutNums', 'inMax', 'outMax', 'inMin', 'outMin', 'inMean', 'outMean',]
     onehot_features = ['stationID', 'time', 'lineID',  'lineSort','lineSortD']
     combine = pd.concat([model_train, test], axis=0)
